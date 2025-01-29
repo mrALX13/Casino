@@ -10,7 +10,7 @@ use App\Setting;
 use App\MinesGame;
 use Illuminate\Support\Facades\Redis;
 
-class NewMinesController extends Controller
+class OldGameController extends Controller
 {
     public function __construct()
 	{
@@ -34,20 +34,12 @@ class NewMinesController extends Controller
 		if(\Cache::has('action.user.' . $user->id)){ return response(['success' => false, 'mess' => 'Подождите перед предыдущим действием!' ]);}
 		\Cache::put('action.user.' . $user->id, '', 0.8);
 
-		// $game = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->first();
+		$game = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->first();
 
-		// $games_on = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->count();
-
-		$games_on = 0;
-		if(\Cache::has('minesGame.user.'. $user->id.'start')){
-			$games_on = \Cache::get('minesGame.user.'. $user->id.'start');
-		}
+		$games_on = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->count();
 		if($games_on == 0){
 			return response(['success' => false, 'mess' => 'Ошибка' ]);
 		}
-
-		$cache_gameMine = \Cache::get('minesGame.user.'. $user->id.'game');
-		$game = json_decode($cache_gameMine);
 
 		$click = json_decode($game->click);
 		$level = $game->level;
@@ -82,36 +74,23 @@ class NewMinesController extends Controller
 
 		
 
-		// $game = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->first();
+		$game = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->first();
 
-		// $games_on = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->count();
-
-		$games_on = 0;
-		if(\Cache::has('minesGame.user.'. $user->id.'start')){
-			$games_on = \Cache::get('minesGame.user.'. $user->id.'start');
-		}
-
-
+		$games_on = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->count();
 		if($games_on == 0){
 			return response(['success' => false, 'mess' => 'Ошибка' ]);
 		}
-
-		$cache_gameMine = \Cache::get('minesGame.user.'. $user->id.'game');
-		$cache_gameMine = json_decode($cache_gameMine);
-
-
-		$click = json_decode($cache_gameMine->click);
-		$win = $cache_gameMine->win;
-		$level = $cache_gameMine->level;
-
+		$click = json_decode($game->click);
+		$win = $game->win;
+		$level = $game->level;
 		if($mine < 1 or $mine > $level){
 			return response(['success' => false, 'mess' => 'Ошибка' ]);
 		}
 
-		$bet = $cache_gameMine->bet;
-		$num_mines = $cache_gameMine->num_mines;
-		$step = $cache_gameMine->step;
-		$bombs = json_decode($cache_gameMine->mines);
+		$bet = $game->bet;
+		$num_mines = $game->num_mines;
+		$step = $game->step;
+		$bombs = json_decode($game->mines);
 
 		if(in_array($mine, $click)){
 			return response(['success' => false, 'mess' => 'Вы уже нажимали на эту ячейку' ]);
@@ -127,33 +106,16 @@ class NewMinesController extends Controller
 		if(in_array($mine, $bombs)){
   			// LOSE
 
-			// $game_publish = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->select('click', 'win', 'bet', 'num_mines', 'step', 'mines', 'hash', 'pole_hash', 'salt1', 'salt2', 'full_string', 'bonusMine')->first();
+			$game_publish = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->select('click', 'win', 'bet', 'num_mines', 'step', 'mines', 'hash', 'pole_hash', 'salt1', 'salt2', 'full_string', 'bonusMine')->first();
 
-			// $game->delete();
-
-			\Cache::put('minesGame.user.'. $user->id.'game', '');
-			\Cache::put('minesGame.user.'. $user->id.'start', 0);
-
-			$game = [];
-			$game['click'] = $cache_gameMine->click;
-			$game['win'] = $cache_gameMine->win;
-			$game['bet'] = $cache_gameMine->bet;
-			$game['num_mines'] = $cache_gameMine->num_mines;
-			$game['step'] = $cache_gameMine->step;
-			$game['mines'] = $cache_gameMine->mines;
-			$game['hash'] = $cache_gameMine->hash;
-			$game['pole_hash'] = $cache_gameMine->pole_hash;
-			$game['salt1'] = $cache_gameMine->salt1;
-			$game['salt2'] = $cache_gameMine->salt2;
-			$game['bonusMine'] = $cache_gameMine->bonusMine;
-			$game['full_string'] = $cache_gameMine->full_string;
+			$game->delete();
 
 			$callback = array(
 				'icon_game' => 'mine',
 				'name_game' => 'Mines',
 				'avatar' => $user->avatar,
 				'name' => $user->name,
-				'bet' => round($cache_gameMine->bet, 2),
+				'bet' => round($game_publish->bet, 2),
 				'win' => 0
 			);
 
@@ -169,29 +131,24 @@ class NewMinesController extends Controller
 			\Cache::put('games', $bets);
 
 
-			return response(['success' => true, 'type' => 'lose', 'game' => $game ]);
+			return response(['success' => true, 'type' => 'lose', 'game' => $game_publish ]);
 		}else{
   			// NEXT
 			$dice_bank = $setting->dice_bank;
 
 			$click[] = $mine;
-			$nexCoeff = self::getCoeff($num_mines, $step + 1, $level);
+			$nexCoeff = self::getCoeff($num_mines, $game->step + 1, $level);
 
-			// $game->win = ($game->bet * $nexCoeff);
-			// $game->click = json_encode($click);
-			// $game->step += 1;
-			// $game->save();
+			$game->win = ($game->bet * $nexCoeff);
+			$game->click = json_encode($click);
+			$game->step += 1;
+			$game->save();
 
-			$cache_gameMine->win = ($cache_gameMine->bet * $nexCoeff);
-			$cache_gameMine->click = json_encode($click);
-			$cache_gameMine->step = $cache_gameMine->step + 1;
-			\Cache::put('minesGame.user.'. $user->id.'game', json_encode($cache_gameMine));
-
-			$win_money = ($bet * self::getCoeff($num_mines, $step + 2, $level)) - $bet;
+			$win_money = ($game->bet * self::getCoeff($num_mines, $game->step + 2, $level)) - $game->bet;
 
 			if($youtube != 3){
 
-				if($dice_bank < ($bet * self::getCoeff($num_mines, $step + 2, $level)) or $dice_bank - $win < 200){
+				if($dice_bank < ($game->bet * self::getCoeff($num_mines, $game->step + 2, $level)) or $dice_bank - $game->win < 200){
 					// Проигрыш 
 					$bombs[0] = $mine; 
 
@@ -211,33 +168,16 @@ class NewMinesController extends Controller
 					$full_string = $salt1.':'.$hash_m.':'.$salt2;
 					$hash = hash('md5', $full_string);
 
-					// $game->salt1 = $salt1;
-					// $game->salt2 = $salt2;
-					// $game->full_string = $full_string;
-					// $game->hash = $hash;
-					// $game->mines = json_encode($bombs);
-					// $game->save();
+					$game->salt1 = $salt1;
+					$game->salt2 = $salt2;
+					$game->full_string = $full_string;
+					$game->hash = $hash;
+					$game->mines = json_encode($bombs);
+					$game->save();
 
-					// $game_publish = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->select('click', 'win', 'bet', 'num_mines', 'step', 'mines', 'hash', 'pole_hash', 'salt1', 'salt2', 'full_string', 'bonusMine')->first();
+					$game_publish = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->select('click', 'win', 'bet', 'num_mines', 'step', 'mines', 'hash', 'pole_hash', 'salt1', 'salt2', 'full_string', 'bonusMine')->first();
 
-					// $game->delete();
-
-					\Cache::put('minesGame.user.'. $user->id.'game', '');
-					\Cache::put('minesGame.user.'. $user->id.'start', 0);
-
-					$game = [];
-					$game['click'] = $cache_gameMine->click;
-					$game['win'] = $cache_gameMine->win;
-					$game['bet'] = $cache_gameMine->bet;
-					$game['num_mines'] = $cache_gameMine->num_mines;
-					$game['step'] = $cache_gameMine->step;
-					$game['mines'] = json_encode($bombs);
-					$game['hash'] = $hash;
-					$game['pole_hash'] = $cache_gameMine->pole_hash;
-					$game['salt1'] = $salt1;
-					$game['salt2'] = $salt2;
-					$game['full_string'] = $full_string;
-					$game['bonusMine'] = $cache_gameMine->bonusMine;
+					$game->delete();
 
 
 					$callback = array(
@@ -245,7 +185,7 @@ class NewMinesController extends Controller
 						'name_game' => 'Mines',
 						'avatar' => $user->avatar,
 						'name' => $user->name,
-						'bet' => round($bet, 2),
+						'bet' => round($game_publish->bet, 2),
 						'win' => 0
 					);
 
@@ -260,21 +200,13 @@ class NewMinesController extends Controller
 
 					\Cache::put('games', $bets);
 
-					return response(['success' => true, 'type' => 'lose', 'game' => $game ]);
+					return response(['success' => true, 'type' => 'lose', 'game' => $game_publish ]);
 
 				}
 			}
-			// $game = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->select('click', 'win', 'bet', 'num_mines', 'step')->first();
-
-			$game = [];
-			$game['click'] = $cache_gameMine->click;
-			$game['win'] = $cache_gameMine->win;
-			$game['bet'] = $cache_gameMine->bet;
-			$game['num_mines'] = $cache_gameMine->num_mines;
-			$game['step'] = $cache_gameMine->step;
-
+			$game = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->select('click', 'win', 'bet', 'num_mines', 'step')->first();
 			$gameOff = 0;
-			if($level - $num_mines - $step - 1 == 0){
+			if($level - $num_mines - $game->step == 0){
 				$gameOff = 1;
 			}
 			return response(['success' => true, 'type' => 'next', 'game' => $game, 'gameOff' => $gameOff ]);
@@ -288,33 +220,12 @@ class NewMinesController extends Controller
 
 		$user = \Auth::user();
 
-		// $games_on = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->count();
-
-		$games_on = 0;
-		if(\Cache::has('minesGame.user.'. $user->id.'start')){
-			$games_on = \Cache::get('minesGame.user.'. $user->id.'start');
-		}
-
+		$games_on = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->count();
 		if($games_on == 0){
 			return response(['success' => false]);
 		}
 
-		// $game = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->select('click', 'win', 'bet', 'num_mines', 'step', 'level','bonusIkses', 'bonusMine')->first();
-
-		$cache_gameMine = \Cache::get('minesGame.user.'. $user->id.'game');
-		$cache_gameMine = json_decode($cache_gameMine);
-
-		$game = [];
-		$game['click'] = $cache_gameMine->click;
-		$game['win'] = $cache_gameMine->win;
-		$game['bet'] = $cache_gameMine->bet;
-		$game['num_mines'] = $cache_gameMine->num_mines;
-		$game['step'] = $cache_gameMine->step;
-		$game['level'] = $cache_gameMine->level;
-		$game['bonusIkses'] = $cache_gameMine->bonusIkses;
-		$game['bonusMine'] = $cache_gameMine->bonusMine;
-
-
+		$game = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->select('click', 'win', 'bet', 'num_mines', 'step', 'level','bonusIkses', 'bonusMine')->first();
 		return response(['success' => true, 'game' => $game]);
 	}
 
@@ -328,51 +239,24 @@ class NewMinesController extends Controller
 		if(\Cache::has('action.user.' . $user->id)){ return response(['success' => false, 'mess' => 'Подождите перед предыдущим действием!' ]);}
 		\Cache::put('action.user.' . $user->id, '', 0.8);
 
-		// $game = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->first();
+		$game = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->first();
 
-		// $games_on = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->count();
-
-		$games_on = 0;
-		if(\Cache::has('minesGame.user.'. $user->id.'start')){
-			$games_on = \Cache::get('minesGame.user.'. $user->id.'start');
-		}
-
-
+		$games_on = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->count();
 		if($games_on == 0){
 			return response(['success' => false, 'mess' => 'Ошибка' ]);
 		}
 
-		$cache_gameMine = \Cache::get('minesGame.user.'. $user->id.'game');
-		$cache_gameMine = json_decode($cache_gameMine);
-
-		$step = $cache_gameMine->step;
+		$step = $game->step;
 		if($step < 1){
 			return response(['success' => false, 'mess' => 'Вы не нажали ни на одну клетку' ]);
 		}
 
-		$win = $cache_gameMine->win;
-		$bet = $cache_gameMine->bet;
+		$win = $game->win;
+		$bet = $game->bet;
 
-		// $game_publish = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->select('click', 'win', 'bet', 'num_mines', 'step', 'mines', 'hash', 'pole_hash', 'salt1', 'salt2', 'full_string', 'bonusMine')->first();
+		$game_publish = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->select('click', 'win', 'bet', 'num_mines', 'step', 'mines', 'hash', 'pole_hash', 'salt1', 'salt2', 'full_string', 'bonusMine')->first();
 
-		// $game->delete();
-
-		$game = [];
-		$game['click'] = $cache_gameMine->click;
-		$game['win'] = $cache_gameMine->win;
-		$game['bet'] = $cache_gameMine->bet;
-		$game['num_mines'] = $cache_gameMine->num_mines;
-		$game['step'] = $cache_gameMine->step;
-		$game['mines'] = $cache_gameMine->mines;
-		$game['hash'] = $cache_gameMine->hash;
-		$game['pole_hash'] = $cache_gameMine->pole_hash;
-		$game['salt1'] = $cache_gameMine->salt1;
-		$game['salt2'] = $cache_gameMine->salt2;
-		$game['full_string'] = $cache_gameMine->full_string;
-		$game['bonusMine'] = $cache_gameMine->bonusMine;
-
-		\Cache::put('minesGame.user.'. $user->id.'game', '');
-		\Cache::put('minesGame.user.'. $user->id.'start', 0);
+		$game->delete();
 
 		$youtube = $user->admin;
 		$auto_mines = $setting->auto_mines;
@@ -415,7 +299,7 @@ class NewMinesController extends Controller
 			'name_game' => 'Mines',
 			'avatar' => $user->avatar,
 			'name' => $user->name,
-			'bet' => round($bet, 2),
+			'bet' => round($game_publish->bet, 2),
 			'win' => round($win, 2)
 		);
 
@@ -430,7 +314,7 @@ class NewMinesController extends Controller
 
 		\Cache::put('games', $bets);
 
-		return response(['success' => true, 'game' => $game, 'lastbalance' => $lastbalance, 'newbalance' => $newbalance]);
+		return response(['success' => true, 'game' => $game_publish, 'lastbalance' => $lastbalance, 'newbalance' => $newbalance]);
 
 
 	}
@@ -481,13 +365,7 @@ class NewMinesController extends Controller
 			return response(['success' => false, 'mess' => 'Введите корректное кол-во бомб' ]);
 		}
 
-		// $games_on = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->count();
-
-		$games_on = 0;
-		if(\Cache::has('minesGame.user.'. $user->id.'start')){
-			$games_on = \Cache::get('minesGame.user.'. $user->id.'start');
-		}
-
+		$games_on = MinesGame::where(['user_id' => $user->id, 'onOff' => 1])->count();
 		if($games_on > 0){
 			return response(['success' => false, 'mess' => 'У вас есть активные игры' ]);
 		}
@@ -557,11 +435,7 @@ class NewMinesController extends Controller
 		}
 
 		$sum_bet *= $bonusMine;
-
-		\Cache::put('minesGame.user.'. $user->id.'start', 1);
-
-
-		$cache_gameMine = array(
+		MinesGame::create(array(
 			'user_id'  => \Auth::user()->id,
 			'bet' => $sum_bet,
 			'num_mines' => $bomb,
@@ -578,9 +452,7 @@ class NewMinesController extends Controller
 			'full_string' => $full_string,
 			'bonusMine' => $bonusMine,
 			'bonusIkses' => json_encode($ikses)
-		);
-
-		\Cache::put('minesGame.user.'. $user->id.'game', json_encode($cache_gameMine));
+		));
 
 		if(!(\Cache::has('user.'.$user->id.'.historyBalance'))){ \Cache::put('user.'.$user->id.'.historyBalance', '[]'); }
 

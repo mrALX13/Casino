@@ -10,7 +10,7 @@ use Auth;
 use App\Payment;
 use Illuminate\Support\Facades\File;
 
-class SlotsControllerNew extends Controller
+class SlotsController extends Controller
 {
     public function getGames()
     {
